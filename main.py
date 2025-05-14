@@ -4,6 +4,8 @@ from src.document_processing.processor import DocumentProcessor
 from src.core.vectorstore import VectorStore
 from src.core.llm import init_llm
 from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
@@ -26,6 +28,54 @@ class RAGSystem:
             output_key="answer",
             input_key="question"
         )
+        
+    def get_prompt_templates(self) -> tuple[PromptTemplate, PromptTemplate]:
+        """Generate the prompt templates based on the current document."""
+        doc_name = self.vector_store.get_source_document_name() or "the provided document"
+        
+        initial_template = f"""You are an expert helping developers understand concepts from {doc_name}.
+Use the following context to answer the question. Please:
+- Break down complex concepts into digestible parts
+- Use bullet points for clarity where appropriate
+- Include relevant code examples when helpful
+- Keep explanations precise but thorough
+- Cite page numbers and relevant sections when available
+- If you don't know the answer, say so instead of making it up
+
+Context: {{context}}
+Question: {{question}}
+
+Answer: Let's explain this step by step:"""
+
+        refine_template = f"""You are an expert helping developers understand concepts from {doc_name}.
+
+Here's the original question: {{question}}
+
+We have already provided the following explanation:
+{{existing_answer}}
+
+Now we have found some additional context: {{context}}
+
+Please refine the explanation by:
+1. Adding any new important information
+2. Correcting any inaccuracies
+3. Maintaining clear formatting with bullet points
+4. Including page numbers and citations where available
+5. Adding relevant code examples if new ones are found
+
+Updated answer:"""
+
+        initial_prompt = PromptTemplate(
+            template=initial_template,
+            input_variables=["context", "question"]
+        )
+        
+        refine_prompt = PromptTemplate(
+            template=refine_template,
+            input_variables=["question", "existing_answer", "context"]
+        )
+        
+        return initial_prompt, refine_prompt
 
     def process_and_index_document(self, file_path: Path):
         """Process a document and index it in the vector store."""
@@ -64,7 +114,7 @@ class RAGSystem:
                 search_type="mmr",
                 search_kwargs={
                     "k": k,
-                    "fetch_k": k * 2,  # Fetch more documents for MMR to choose from
+                    "fetch_k": k*2,  # Fetch more documents for MMR to choose from
                     "lambda_mult": 0.5  # Control diversity
                 }
             )
@@ -81,56 +131,14 @@ class RAGSystem:
             )
             
             # For one-off MMR queries, use RetrievalQA with refine chain type
-            from langchain.chains import RetrievalQA
-            from langchain.prompts import PromptTemplate
-              # Create the initial prompt for the first document
-            question_prompt = PromptTemplate(
-                template="""
-You are a senior React developer helping junior developers understand advanced concepts from the book "Learning React Modern Patterns" by Eve Porcello & Alex Banks.
-
-Use the following context to answer the question. Please:
-- Respond in the tone of a React developer
-- Use bullet points for clarity
-- Keep explanations concise but insightful
-- Cite the page number and source if available
-- If you don't know the answer, say so instead of making it up
-
-Context: {context}
-Question: {question}
-
-Answer: Let's explain this step by step:""",
-                input_variables=["context", "question"]
-            )
-
-            # Create the refine prompt for subsequent documents
-            refine_prompt = PromptTemplate(
-                template="""
-You are a senior React developer helping junior developers understand advanced concepts.
-
-Here's the original question: {question}
-
-We have already provided the following explanation:
-{existing_answer}
-
-Now we have found some additional context: {context}
-
-Please refine the explanation by:
-1. Adding any new important information
-2. Correcting any inaccuracies
-3. Maintaining the bullet-point format
-4. Keeping the React developer tone
-5. Citing page numbers when available
-
-Updated answer:""",
-                input_variables=["question", "existing_answer", "context"]
-            )
+            initial_prompt, refine_prompt = self.get_prompt_templates()
             
             self.qa_chain = RetrievalQA.from_chain_type(
                 llm=self.llm,
                 chain_type="refine",
                 retriever=retriever,
                 chain_type_kwargs={
-                    "question_prompt": question_prompt,
+                    "question_prompt": initial_prompt,
                     "refine_prompt": refine_prompt,
                     "document_variable_name": "context"
                 },
@@ -230,7 +238,7 @@ def search(query, k, search_type):
 @cli.command()
 @click.option('--k', default=4, help='Number of document chunks to use for generating the answer')
 @click.option('--search-type', type=click.Choice(['similarity', 'mmr']), default='similarity',
-              help='Search technique to use. "similarity" for basic similarity search, "mmr" for MMR with contextual compression')
+                help='Search technique to use. "similarity" for basic similarity search, "mmr" for MMR with contextual compression')
 def chat(k, search_type):
     """Start an interactive chat session with memory of conversation history."""
     rag = RAGSystem()
