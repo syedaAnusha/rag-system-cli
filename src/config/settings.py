@@ -20,8 +20,8 @@ EMBEDDING_MODEL = "models/embedding-001"
 LLM_MODEL = "gemini-2.0-flash"
 
 # Document processing settings
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
 
 # Search settings
 TOP_K_RESULTS = 3
