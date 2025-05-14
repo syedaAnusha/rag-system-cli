@@ -3,7 +3,8 @@ from pathlib import Path
 from src.document_processing.processor import DocumentProcessor
 from src.core.vectorstore import VectorStore
 from src.core.llm import init_llm
-from langchain.chains import RetrievalQA
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
 from rich.console import Console
 from rich.panel import Panel
 import re
@@ -16,6 +17,12 @@ class RAGSystem:
         self.vector_store = VectorStore()
         self.llm = init_llm()
         self.qa_chain = None
+        self.memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+            output_key="answer",
+            input_key="question"
+        )
 
     def process_and_index_document(self, file_path: Path):
         """Process a document and index it in the vector store."""
@@ -31,7 +38,7 @@ class RAGSystem:
         return len(chunks)
 
     def setup_qa_chain(self, k: int = 4):
-        """Initialize the QA chain with the vector store retriever."""
+        """Initialize the Conversational QA chain with the vector store retriever."""
         if not self.vector_store.vector_store:
             self.vector_store.load_vector_store()
         
@@ -40,16 +47,16 @@ class RAGSystem:
         
         retriever = self.vector_store.vector_store.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": k}  # Use the provided k value
+            search_kwargs={"k": k}
         )
         
-        self.qa_chain = RetrievalQA.from_chain_type(
+        self.qa_chain = ConversationalRetrievalChain.from_llm(
             llm=self.llm,
-            chain_type="stuff",
             retriever=retriever,
+            memory=self.memory,
             return_source_documents=True,
-            verbose=True
-        )
+            verbose=False
+        )        
         return self.qa_chain
 
     def query_document(self, query: str, k: int = 4):
@@ -58,8 +65,8 @@ class RAGSystem:
         if not self.qa_chain:
             self.setup_qa_chain(k=k)
             
-        response = self.qa_chain.invoke({"query": query})
-        return response["result"], response["source_documents"]
+        response = self.qa_chain.invoke({"question": query})  # Changed query to question
+        return response["answer"], response["source_documents"]  # Changed result to answer
 
 @click.group()
 def cli():
@@ -113,6 +120,48 @@ def search(query, k):
             console.print(f"[cyan]{i}.[/cyan] Page {page}, Chunk {chunk}")
     
     console.print("\n" + "="*80)
+
+@cli.command()
+@click.option('--k', default=4, help='Number of document chunks to use for generating the answer')
+def chat(k):
+    """Start an interactive chat session with memory of conversation history."""
+    rag = RAGSystem()
+    console.print("\n[green]Starting chat session. Type 'exit' to end the conversation.[/green]")
+    console.print("[green]The system will remember your conversation history.[/green]\n")
+    
+    while True:
+        # Get user input
+        query = input(click.style("You: ", fg='green', bold=True))
+        
+        # Check for exit command
+        if query.lower() in ['exit', 'quit']:
+            console.print("\n[yellow]Ending chat session...[/yellow]")
+            break
+        
+        # Get response
+        answer, source_docs = rag.query_document(query, k=k)
+        
+        # Print the answer
+        answer_panel = Panel(
+            answer,
+            title="[yellow bold]Assistant[/yellow bold]",
+            border_style="yellow",
+            padding=(1, 2)
+        )
+        console.print("\n", answer_panel)
+        
+        # Print source information
+        if source_docs:
+            source = source_docs[0].metadata.get('source', 'Unknown source')
+            source_name = Path(source).name
+            
+            console.print("\n[cyan bold]Sources Used:[/cyan bold]")
+            for i, doc in enumerate(source_docs, 1):
+                page = doc.metadata.get('page', 'Unknown')
+                chunk = doc.metadata.get('chunk', 'Unknown')
+                console.print(f"[cyan]{i}.[/cyan] Page {page}, Chunk {chunk}")
+        
+        console.print("\n" + "-"*80 + "\n")
 
 if __name__ == '__main__':
     cli()
