@@ -103,17 +103,14 @@ def search(query, k):
         padding=(1, 2)
     )
     console.print("\n", answer_panel)
-    
-    # Print source information
+      # Print source information
     if source_docs:
         # Get the source document name (should be same for all chunks)
         source = source_docs[0].metadata.get('source', 'Unknown source')
         source_name = Path(source).name
         
-        console.print("\n[cyan bold]Source Document:[/cyan bold]")
-        console.print(f"[cyan]📚 {source_name}[/cyan]")
-        
-        console.print("\n[cyan bold]References:[/cyan bold]")
+        # Print references with source name only once
+        console.print("\n[cyan bold]References from [/cyan bold]" + f"[cyan]📚 {source_name}:[/cyan]")
         for i, doc in enumerate(source_docs, 1):
             page = doc.metadata.get('page', 'Unknown')
             chunk = doc.metadata.get('chunk', 'Unknown')
@@ -149,13 +146,13 @@ def chat(k):
             padding=(1, 2)
         )
         console.print("\n", answer_panel)
-        
-        # Print source information
+          # Print source information
         if source_docs:
             source = source_docs[0].metadata.get('source', 'Unknown source')
             source_name = Path(source).name
             
-            console.print("\n[cyan bold]Sources Used:[/cyan bold]")
+            # Print references with source name only once
+            console.print("\n[cyan bold]References from [/cyan bold]" + f"[cyan]📚 {source_name}:[/cyan]")
             for i, doc in enumerate(source_docs, 1):
                 page = doc.metadata.get('page', 'Unknown')
                 chunk = doc.metadata.get('chunk', 'Unknown')
