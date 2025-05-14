@@ -41,5 +41,4 @@ def init_embeddings():
     return GoogleGenerativeAIEmbeddings(
         model=EMBEDDING_MODEL,
         google_api_key=GOOGLE_API_KEY,
-        task_type="retrieval_query"
     )

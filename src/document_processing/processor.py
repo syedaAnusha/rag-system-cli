@@ -62,9 +62,10 @@ class DocumentProcessor:
                 "metadata": {
                     **doc.metadata,
                     "source": str(file_path),
-                    "file_type": "pdf"
+                    "file_type": "pdf",
+                    "chunk": idx + 1  # Add chunk number (1-based)
                 }
-            } for doc in docs]
+            } for idx, doc in enumerate(docs)]
             
         except Exception as e:
             print(f"Error processing document: {str(e)}")

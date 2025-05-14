@@ -49,11 +49,62 @@ def search(query, k):
     rag = RAGSystem()
     results = rag.query_document(query, k=k)
     
-    click.echo("\nSearch Results:")
+    click.echo("\n" + "="*80)
+    click.echo(click.style(f"🔍 Search Results for: ", fg='blue') + 
+              click.style(f'"{query}"', fg='green', bold=True))
+    click.echo("="*80)
+    
     for i, result in enumerate(results, 1):
-        click.echo(f"\n--- Result {i} (Score: {result['score']:.4f}) ---")
-        click.echo(f"Source: {result['metadata']['source']}")
-        click.echo(f"Content: {result['content'][:200]}...")
+        # Calculate relevance score percentage (converting distance to similarity)
+        relevance = ((1 - result['score']) * 100)
+        
+        # Format the section header
+        click.echo(f"\n{click.style(f'Result {i}', fg='blue', bold=True)}")
+        click.echo(f"{click.style('Relevance:', fg='cyan')} {relevance:.1f}%")
+        
+        # Source information
+        source = result['metadata'].get('source', 'Unknown source')
+        page = result['metadata'].get('page', 'Unknown page')
+        chunk = result['metadata'].get('chunk', i)  # Use i as fallback if chunk number not available
+        click.echo(f"{click.style('Source:', fg='cyan')} {source}")
+        click.echo(f"{click.style('Page:', fg='cyan')} {page}")
+        click.echo(f"{click.style('Chunk:', fg='cyan')} {chunk}")
+        
+        # Content section
+        click.echo(f"\n{click.style('Content:', fg='yellow', bold=True)}")
+        
+        # Clean and format the content
+        content = result['content'].strip()
+        
+        # Remove multiple newlines and spaces
+        content = ' '.join([line.strip() for line in content.split('\n') if line.strip()])
+        
+        # Format code blocks if they exist (text between backticks or with specific indentation)
+        if '```' in content or any(line.startswith('    ') for line in content.split('\n')):
+            # Split into text and code blocks
+            blocks = content.split('```')
+            formatted_blocks = []
+            for j, block in enumerate(blocks):
+                if j % 2 == 1:  # Code block
+                    formatted_blocks.append(click.style("\n📝 Code Example:", fg='green', bold=True))
+                    formatted_blocks.append(click.style(block.strip(), fg='white', bg='black'))
+                else:  # Text block
+                    formatted_blocks.append(block.strip())
+            content = '\n'.join(formatted_blocks)
+        
+        # Add ellipsis if content is too long
+        if len(content) > 600:
+            # Try to find a good breaking point (end of sentence)
+            break_point = content[:600].rfind('.')
+            if break_point == -1:
+                break_point = 600
+            content = content[:break_point + 1] + "..."
+        
+        # Add indentation for better readability
+        content = '\n'.join('    ' + line for line in content.split('\n'))
+        click.echo(content + '\n')
+        
+        click.echo("-"*80)
 
 if __name__ == '__main__':
     cli()
