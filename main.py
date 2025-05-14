@@ -23,7 +23,7 @@ class RAGSystem:
         self.vector_store.save_vector_store()
         return len(chunks)
 
-    def query_document(self, query: str, k: int = 4):
+    def query_document(self, query: str, k: int = 3):
         """Query the document using similarity search."""
         return self.vector_store.similarity_search(query, k=k)
 
@@ -43,7 +43,7 @@ def index(file_path):
 
 @cli.command()
 @click.argument('query')
-@click.option('--k', default=4, help='Number of results to return')
+@click.option('--k', default=3, help='Number of results to return')
 def search(query, k):
     """Search the indexed documents."""
     rag = RAGSystem()
