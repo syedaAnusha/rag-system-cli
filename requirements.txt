@@ -16,3 +16,4 @@ langchain-text-splitters
 google-ai-generativelanguage
 langchain_huggingface
 pypdf
+click
