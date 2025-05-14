@@ -4,6 +4,11 @@ from src.document_processing.processor import DocumentProcessor
 from src.core.vectorstore import VectorStore
 from src.core.llm import init_llm
 from langchain.chains import RetrievalQA
+from rich.console import Console
+from rich.panel import Panel
+import re
+
+console = Console()
 
 class RAGSystem:
     def __init__(self):
@@ -25,7 +30,7 @@ class RAGSystem:
         self.vector_store.save_vector_store()
         return len(chunks)
 
-    def setup_qa_chain(self):
+    def setup_qa_chain(self, k: int = 4):
         """Initialize the QA chain with the vector store retriever."""
         if not self.vector_store.vector_store:
             self.vector_store.load_vector_store()
@@ -35,7 +40,7 @@ class RAGSystem:
         
         retriever = self.vector_store.vector_store.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 4}
+            search_kwargs={"k": k}  # Use the provided k value
         )
         
         self.qa_chain = RetrievalQA.from_chain_type(
@@ -47,27 +52,14 @@ class RAGSystem:
         )
         return self.qa_chain
 
-    def query_document(self, query: str, k: int = 3):
-        """Query the document using QA chain for more contextual answers."""
+    def query_document(self, query: str, k: int = 4):
+        """Query the document using QA chain for contextual answers."""
+        # Setup QA chain with the specified k value
         if not self.qa_chain:
-            self.setup_qa_chain()
+            self.setup_qa_chain(k=k)
             
-        response = self.qa_chain({"query": query})
-        
-        # Format results with both answer and source documents
-        results = []
-        for i, doc in enumerate(response["source_documents"], 1):
-            results.append({
-                "content": doc.page_content,
-                "metadata": doc.metadata,
-                "score": 0.0  # RetrievalQA doesn't provide scores directly
-            })
-        
-        # Add the answer as the first result
-        if len(results) > k:
-            results = results[:k]
-            
-        return results, response["result"]
+        response = self.qa_chain.invoke({"query": query})
+        return response["result"], response["source_documents"]
 
 @click.group()
 def cli():
@@ -81,75 +73,46 @@ def index(file_path):
     rag = RAGSystem()
     file_path = Path(file_path)
     num_chunks = rag.process_and_index_document(file_path)
-    click.echo(f"Successfully processed and indexed {num_chunks} chunks from {file_path}")
+    console.print(f"\n[green]Successfully processed and indexed {num_chunks} chunks from {file_path}[/green]")
 
 @cli.command()
 @click.argument('query')
-@click.option('--k', default=3, help='Number of results to return')
+@click.option('--k', default=4, help='Number of document chunks to use for generating the answer')
 def search(query, k):
-    """Search the indexed documents."""
+    """Search and answer questions using the indexed documents."""
     rag = RAGSystem()
-    results, answer = rag.query_document(query, k=k)
+    answer, source_docs = rag.query_document(query, k=k)
     
-    click.echo("\n" + "="*80)
-    click.echo(click.style(f"🔍 Search Results for: ", fg='blue') + 
-              click.style(f'"{query}"', fg='green', bold=True))
-    click.echo("="*80)
+    # Print the query
+    console.print("\n" + "="*80)
+    console.print("[blue]🔍 Question: [/blue]" + f"[green bold]\"{query}\"[/green bold]")
+    console.print("="*80)
     
-    click.echo(f"\n{click.style('Answer:', fg='yellow', bold=True)}")
-    click.echo(f"{answer}\n")
+    # Print the answer in a panel with markdown formatting
+    answer_panel = Panel(
+        answer,
+        title="[yellow bold]Answer[/yellow bold]",
+        border_style="yellow",
+        padding=(1, 2)
+    )
+    console.print("\n", answer_panel)
     
-    for i, result in enumerate(results, 1):
-        # Calculate relevance score percentage (converting distance to similarity)
-        #relevance = ((1 - result['score']) * 100)
+    # Print source information
+    if source_docs:
+        # Get the source document name (should be same for all chunks)
+        source = source_docs[0].metadata.get('source', 'Unknown source')
+        source_name = Path(source).name
         
-        # Format the section header
-        click.echo(f"\n{click.style(f'Result {i}', fg='blue', bold=True)}")
-        #click.echo(f"{click.style('Relevance:', fg='cyan')} {relevance:.1f}%")
+        console.print("\n[cyan bold]Source Document:[/cyan bold]")
+        console.print(f"[cyan]📚 {source_name}[/cyan]")
         
-        # Source information
-        source = result['metadata'].get('source', 'Unknown source')
-        page = result['metadata'].get('page', 'Unknown page')
-        chunk = result['metadata'].get('chunk', i)  # Use i as fallback if chunk number not available
-        click.echo(f"{click.style('Source:', fg='cyan')} {source}")
-        click.echo(f"{click.style('Page:', fg='cyan')} {page}")
-        click.echo(f"{click.style('Chunk:', fg='cyan')} {chunk}")
-        
-        # Content section
-        click.echo(f"\n{click.style('Content:', fg='yellow', bold=True)}")
-        
-        # Clean and format the content
-        content = result['content'].strip()
-        
-        # Remove multiple newlines and spaces
-        content = ' '.join([line.strip() for line in content.split('\n') if line.strip()])
-        
-        # Format code blocks if they exist (text between backticks or with specific indentation)
-        if '```' in content or any(line.startswith('    ') for line in content.split('\n')):
-            # Split into text and code blocks
-            blocks = content.split('```')
-            formatted_blocks = []
-            for j, block in enumerate(blocks):
-                if j % 2 == 1:  # Code block
-                    formatted_blocks.append(click.style("\n📝 Code Example:", fg='green', bold=True))
-                    formatted_blocks.append(click.style(block.strip(), fg='white', bg='black'))
-                else:  # Text block
-                    formatted_blocks.append(block.strip())
-            content = '\n'.join(formatted_blocks)
-        
-        # Add ellipsis if content is too long
-        if len(content) > 600:
-            # Try to find a good breaking point (end of sentence)
-            break_point = content[:600].rfind('.')
-            if break_point == -1:
-                break_point = 600
-            content = content[:break_point + 1] + "..."
-        
-        # Add indentation for better readability
-        content = '\n'.join('    ' + line for line in content.split('\n'))
-        click.echo(content + '\n')
-        
-        click.echo("-"*80)
+        console.print("\n[cyan bold]References:[/cyan bold]")
+        for i, doc in enumerate(source_docs, 1):
+            page = doc.metadata.get('page', 'Unknown')
+            chunk = doc.metadata.get('chunk', 'Unknown')
+            console.print(f"[cyan]{i}.[/cyan] Page {page}, Chunk {chunk}")
+    
+    console.print("\n" + "="*80)
 
 if __name__ == '__main__':
     cli()

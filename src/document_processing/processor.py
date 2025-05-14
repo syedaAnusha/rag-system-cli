@@ -54,8 +54,8 @@ class DocumentProcessor:
             if not docs:
                 raise ValueError("Document splitting resulted in no chunks")
             
-            print(f"Created {len(docs)} chunks")
-            print(f"Average chunk size: {sum(len(doc.page_content) for doc in docs) / len(docs):.2f} characters")
+            #print(f"Created {len(docs)} chunks")
+            #print(f"Average chunk size: {sum(len(doc.page_content) for doc in docs) / len(docs):.2f} characters")
             
             return [{
                 "text": doc.page_content,
