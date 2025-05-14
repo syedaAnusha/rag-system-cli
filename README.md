@@ -16,8 +16,13 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
   - FAISS vector store for efficient similarity search
   - Google's Gemini model for embeddings
   - Configurable context window (k parameter)
+  - Multiple retrieval techniques:
+    - Similarity Search for basic retrieval
+    - MMR with Contextual Compression for diverse, focused results
 - 💡 Question Answering
-  - LangChain's RetrievalQA chain
+  - Multiple chain types optimized for different scenarios:
+    - ConversationalRetrievalChain for chat sessions
+    - RetrievalQA with refine chain for detailed one-off queries
   - Contextual answer generation
   - Source attribution with page and chunk references
   - Rich formatted output with code highlighting
@@ -77,16 +82,42 @@ python main.py index "documents/your-document.pdf"
 
 Query the indexed document with questions:
 
-```bash
+```powershell
 python main.py search "your question here"
 ```
 
 Options:
 
 - `--k`: Number of chunks to use for context (default: 4)
-  ```bash
-  python main.py search "what is closure?" --k 10
+
+  ```powershell
+  python main.py search "what is closure?" --k 5
   ```
+
+- `--search-type`: Retrieval technique to use (default: similarity)
+  - `similarity`: Basic similarity search
+  - `mmr`: MMR with contextual compression for diverse results
+  ```powershell
+  # Using MMR with contextual compression
+  python main.py search "what is useState hook?" --search-type mmr --k 5
+  ```
+
+### 3. Interactive Chat Mode
+
+Start an interactive chat session with conversation memory:
+
+```powershell
+python main.py chat
+```
+
+Options:
+
+- Same options as search command (`--k` and `--search-type`)
+- Chat mode always maintains conversation history
+
+```powershell
+python main.py chat --k 4 --search-type similarity
+```
 
 The search results include:
 
