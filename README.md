@@ -8,11 +8,19 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
 
 ## Features
 
-- Document processing and ingestion pipeline
-- Vector storage for efficient similarity search
-- RAG-enhanced responses using Google's Gemini model
-- Command-line interface for easy interaction
-- Modular and extensible architecture
+- 📚 Document Processing
+  - PDF document support with efficient chunking
+  - RecursiveCharacterTextSplitter with configurable parameters
+  - Metadata preservation (page numbers, chunk numbers)
+- 🔍 Advanced Search & Retrieval
+  - FAISS vector store for efficient similarity search
+  - Google's Gemini model for embeddings
+  - Configurable context window (k parameter)
+- 💡 Question Answering
+  - LangChain's RetrievalQA chain
+  - Contextual answer generation
+  - Source attribution with page and chunk references
+  - Rich formatted output with code highlighting
 
 ## Tech Stack
 
@@ -57,11 +65,36 @@ rag-system-cli/
 
 ## Usage
 
-1. Place your documents in the `data/raw` directory
-2. Run the CLI:
-   ```bash
-   python main.py [command] [options]
-   ```
+### 1. Index a Document
+
+Index a PDF document to make it searchable:
+
+```bash
+python main.py index "documents/your-document.pdf"
+```
+
+### 2. Search and Ask Questions
+
+Query the indexed document with questions:
+
+```bash
+python main.py search "your question here"
+```
+
+Options:
+
+- `--k`: Number of chunks to use for context (default: 4)
+  ```bash
+  python main.py search "what is closure?" --k 10
+  ```
+
+The search results include:
+
+- Your question
+- A comprehensive answer from the LLM
+- Source document information
+- Page and chunk references for transparency
+- Code snippets with syntax highlighting (when present)
 
 ## Contributing
 
