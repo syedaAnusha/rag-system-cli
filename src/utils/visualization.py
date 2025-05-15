@@ -58,28 +58,16 @@ def plot_query_document_space(queries, query_embeddings, documents, doc_embeddin
         plt.annotate(f'd{i+1}', (point[0], point[1]),
                     xytext=(5, 5), textcoords='offset points',
                     fontsize=12)
-    
-    # Original query
+      # Original query only
     plt.scatter(query_points[0, 0], query_points[0, 1],
                c='red', marker='*', s=100,
                edgecolor='white', linewidth=1, zorder=4)
     plt.annotate('Q', (query_points[0, 0], query_points[0, 1]),
                 xytext=(5, 5), textcoords='offset points',
                 color='red', fontsize=12, fontweight='bold')
-    
-    # Expanded queries if any
-    if len(query_points) > 1:
-        plt.scatter(query_points[1:, 0], query_points[1:, 1],
-                   c='orange', marker='*', s=100,
-                   edgecolor='white', linewidth=1, zorder=3)
-        for i, point in enumerate(query_points[1:], 1):
-            plt.annotate(f'q{i}', (point[0], point[1]),
-                        xytext=(5, 5), textcoords='offset points',
-                        color='darkorange', fontsize=12)
                   # Create custom legend handles
     from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
-
+    from matplotlib.lines import Line2D    
     legend_elements = [
         # Corpus dot (using scatter for the legend)
         plt.scatter([], [], c='green', s=100, alpha=0.9, label='corpus'),
@@ -88,14 +76,8 @@ def plot_query_document_space(queries, query_embeddings, documents, doc_embeddin
         plt.scatter([], [], c='lightblue', s=100, alpha=0.6, label='retrieved docs'),
         
         # Original query star
-        plt.scatter([], [], c='red', marker='*', s=100, label='Original Query'),
+        plt.scatter([], [], c='red', marker='*', s=100, label='Query')
     ]
-    
-    # Add expanded query star if they exist
-    if len(query_points) > 1:
-        legend_elements.append(
-            plt.scatter([], [], c='orange', marker='*', s=100, label='Expanded Queries')
-        )
     
     plt.title('Semantic Space Visualization (UMAP)', fontsize=14, pad=20)
     plt.grid(True, alpha=0.4)

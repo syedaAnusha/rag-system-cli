@@ -272,7 +272,7 @@ Return only the questions as a numbered list without any introduction or explana
                     
                     # Prepare query and document texts for embedding
                     texts_to_embed = (
-                        expanded_queries +  # Queries first
+                        [query] +  # Original query only
                         [doc.page_content for doc in all_docs]  # Then retrieved docs
                     )
                     
@@ -280,11 +280,9 @@ Return only the questions as a numbered list without any introduction or explana
                     console.print("[blue]Computing embeddings for queries and retrieved documents...[/blue]")
                     new_embeddings = self.vector_store.embeddings.embed_documents(texts_to_embed)
                     
-                    # Split embeddings into groups
-                    n_queries = len(expanded_queries)
-                    n_docs = len(all_docs)
-                    query_embeddings = np.array(new_embeddings[:n_queries])
-                    doc_embeddings = np.array(new_embeddings[n_queries:])
+                    # Split embeddings into groups - only original query
+                    query_embeddings = np.array([new_embeddings[0]])  # Just the original query
+                    doc_embeddings = np.array(new_embeddings[1:])
                     
                     # Create visualizations directory
                     plots_dir = Path("data/visualizations")
