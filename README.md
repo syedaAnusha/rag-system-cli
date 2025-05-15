@@ -15,14 +15,15 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
 - 🔍 Advanced Search & Retrieval
   - FAISS vector store for efficient similarity search
   - Google's Gemini model for embeddings
-  - Configurable context window (k parameter)
-  - Multiple retrieval techniques:
-    - Similarity Search for basic retrieval
-    - MMR with Contextual Compression for diverse, focused results
+  - Configurable context window (k parameter)  - Multiple retrieval techniques:
+    - Similarity Search: Basic retrieval with stuff chain
+    - MMR (Maximum Marginal Relevance): Diverse results with contextual compression
+    - Multiple-Query: Comprehensive results by generating related questions
 - 💡 Question Answering
   - Multiple chain types optimized for different scenarios:
-    - ConversationalRetrievalChain for chat sessions
-    - RetrievalQA with refine chain for detailed one-off queries
+    - ConversationalRetrievalChain with stuff chain for chat sessions
+    - RetrievalQA with refine chain for one-off MMR queries
+    - Multiple-query expansion for comprehensive answers
   - Contextual answer generation
   - Source attribution with page and chunk references
   - Rich formatted output with code highlighting
@@ -95,11 +96,15 @@ Options:
   ```
 
 - `--search-type`: Retrieval technique to use (default: similarity)
-  - `similarity`: Basic similarity search
+  - `similarity`: Basic similarity search with stuff chain
   - `mmr`: MMR with contextual compression for diverse results
+  - `multiple-query`: Comprehensive search using query expansion
   ```powershell
   # Using MMR with contextual compression
   python main.py search "what is useState hook?" --search-type mmr --k 5
+
+  # Using multiple-query expansion
+  python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
   ```
 
 ### 3. Interactive Chat Mode
@@ -112,11 +117,23 @@ python main.py chat
 
 Options:
 
-- Same options as search command (`--k` and `--search-type`)
+- `--k`: Number of chunks to use for context (default: 4)
+- `--search-type`: Retrieval technique (default: similarity)
+  - `similarity`: Basic search with conversation memory
+  - `mmr`: Diverse results while maintaining chat context
+  - `multiple-query`: Comprehensive answers with query expansion
+- `--num-queries`: Number of expanded queries (for multiple-query mode)
 - Chat mode always maintains conversation history
 
 ```powershell
+# Basic chat with similarity search
 python main.py chat --k 4 --search-type similarity
+
+# Chat with MMR for diverse responses
+python main.py chat --k 6 --search-type mmr
+
+# Chat with query expansion
+python main.py chat --k 6 --search-type multiple-query --num-queries 3
 ```
 
 The search results include:
