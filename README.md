@@ -22,11 +22,11 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
     - Multiple-Query: Comprehensive results with query expansion and cross-encoder reranking
   - Advanced reranking:
     - Cross-encoder document reranking using ms-marco-MiniLM for optimized relevance
-    - Automatic document ordering based on cross-encoder relevance scores
-  - 2D UMAP Visualization of semantic space:
-    - Shows entire document corpus
-    - Highlights retrieved documents (d1, d2, ...)
-    - Marks original query (Q) and expanded queries (q1, q2, ...)
+    - Automatic document ordering based on cross-encoder relevance scores  - 2D UMAP Visualization of semantic space:
+    - Shows document corpus as background
+    - Displays reranked documents with distance scores and color gradient
+    - Shows original query (Q) with connecting lines to retrieved documents
+    - Accurate distance preservation between query and retrieved documents
 - 💡 Question Answering
   - Multiple chain types optimized for different scenarios:
     - ConversationalRetrievalChain with stuff chain for chat sessions
@@ -137,10 +137,11 @@ Options:
 
 The multiple-query expansion mode generates a UMAP visualization that shows:
 
-- All document chunks in the corpus as blue dots
-- Retrieved relevant documents as larger light blue dots (labeled d1, d2, etc.)
-- Original query as a red star (labeled Q)
-- Expanded queries as orange stars (labeled q1, q2, etc.)
+- Document corpus as light gray background points
+- Retrieved documents colored by relevance score
+- Original query as a red star (Q)
+- Dashed lines connecting query to retrieved documents
+- Cosine distance scores for each retrieved document
 
 This visualization helps in understanding:
 
