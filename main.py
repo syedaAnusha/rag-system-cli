@@ -263,26 +263,28 @@ Return only the questions as a numbered list without any introduction or explana
                 try:
                     from src.utils.visualization import plot_query_document_space
                     import numpy as np
-                    from pathlib import Path                    # Get all document chunks from the vector store
+                    from pathlib import Path                    # Get all document chunks and their embeddings from the vector store
                     corpus_docs = list(self.vector_store.vector_store.docstore._dict.values())
                     
-                    # Prepare texts for batch embedding
+                    # Get the actual embeddings for corpus documents from FAISS
+                    console.print("[blue]Getting corpus embeddings from FAISS...[/blue]")
+                    corpus_embeddings = self.vector_store.vector_store.index.reconstruct_n(0, len(corpus_docs))
+                    
+                    # Prepare query and document texts for embedding
                     texts_to_embed = (
                         expanded_queries +  # Queries first
-                        [doc.page_content for doc in all_docs] +  # Then retrieved docs
-                        [doc.page_content for doc in corpus_docs]  # Then corpus
+                        [doc.page_content for doc in all_docs]  # Then retrieved docs
                     )
                     
-                    # Batch embed all texts
-                    console.print("[blue]Computing embeddings for visualization...[/blue]")
-                    all_embeddings = self.vector_store.embeddings.embed_documents(texts_to_embed)
+                    # Batch embed query and retrieved documents
+                    console.print("[blue]Computing embeddings for queries and retrieved documents...[/blue]")
+                    new_embeddings = self.vector_store.embeddings.embed_documents(texts_to_embed)
                     
                     # Split embeddings into groups
                     n_queries = len(expanded_queries)
                     n_docs = len(all_docs)
-                    query_embeddings = np.array(all_embeddings[:n_queries])
-                    doc_embeddings = np.array(all_embeddings[n_queries:n_queries + n_docs])
-                    corpus_embeddings = np.array(all_embeddings[n_queries + n_docs:])
+                    query_embeddings = np.array(new_embeddings[:n_queries])
+                    doc_embeddings = np.array(new_embeddings[n_queries:])
                     
                     # Create visualizations directory
                     plots_dir = Path("data/visualizations")
