@@ -101,15 +101,8 @@ Updated answer:"""
             self.vector_store.load_vector_store()
         
         if not self.vector_store.vector_store:
-            raise ValueError("No vector store available. Please index documents first.")
-
-        # For chat mode or similarity search, use basic similarity retriever
-        if is_chat or search_type == "similarity":
-            base_retriever = self.vector_store.vector_store.as_retriever(
-                search_type="similarity",
-                search_kwargs={"k": k}
-            )
-        else:  # For one-off queries with MMR
+            raise ValueError("No vector store available. Please index documents first.")        # Set up the base retriever according to search type
+        if search_type == "mmr":
             base_retriever = self.vector_store.vector_store.as_retriever(
                 search_type="mmr",
                 search_kwargs={
@@ -117,6 +110,17 @@ Updated answer:"""
                     "fetch_k": k*2,  # Fetch more documents for MMR to choose from
                     "lambda_mult": 0.5  # Control diversity
                 }
+            )
+        elif search_type == "multiple-query":
+            # For multiple-query, we'll use similarity search but handle expansion in query_document
+            base_retriever = self.vector_store.vector_store.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": k}
+            )
+        else:  # similarity search or chat mode
+            base_retriever = self.vector_store.vector_store.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": k}
             )
         
         # Add contextual compression only for one-off MMR queries
@@ -155,30 +159,134 @@ Updated answer:"""
                 return_source_documents=True,
                 verbose=False
             )
-        return self.qa_chain          
-    def query_document(self, query: str, k: int = 4, search_type: str = "similarity", is_chat: bool = False):
+        return self.qa_chain            
+    def expand_query(self, question: str, num_queries: int = 3) -> list[str]:
+        """Generate related questions for multiple query expansion.
+        
+        Args:
+            question (str): The original question to expand
+            num_queries (int): Number of additional questions to generate
+            
+        Returns:
+            list[str]: List of questions including the original and generated ones
+        """
+        expansion_prompt = f"""Given the user question: "{question}"
+
+Please generate {num_queries} related but more specific questions that would help provide a comprehensive answer.
+Return only the questions as a numbered list without any introduction or explanation."""
+
+        expansion_response = self.llm.invoke(expansion_prompt)
+        content = expansion_response.content if hasattr(expansion_response, 'content') else str(expansion_response)
+          # Extract numbered questions from the response and clean them
+        expanded_questions = []
+        for q in content.split('\n'):
+            q = q.strip()
+            if q and any(c.isdigit() for c in q[:2]):
+                # Remove the numbering prefix (e.g., "1. ", "2. ", etc.)
+                q = re.sub(r'^\d+\.\s*', '', q)
+                expanded_questions.append(q)
+        
+        # Print expanded queries for visibility
+        console.print("\n[blue]Generated expanded queries:[/blue]")
+        for i, q in enumerate(expanded_questions, 1):
+            console.print(f"[cyan]{i}.[/cyan] {q}")
+        console.print()
+        
+        # Include original question
+        return [question] + expanded_questions    
+    def query_document(self, query: str, k: int = 4, search_type: str = "similarity", is_chat: bool = False,
+                    num_queries: int = 3, inner_search_type: str = "similarity"):
         """Query the document using QA chain for contextual answers.
         
         Args:
             query (str): The question to ask
             k (int): Number of documents to retrieve
-            search_type (str): Type of search to use. Either "similarity" or "mmr"
+            search_type (str): Type of search to use. Either "similarity", "mmr", or "multiple-query"
             is_chat (bool): Whether this is a chat session
-        """
-        # Setup QA chain with the specified k value and search type
+            num_queries (int): Number of additional queries to generate when using multiple-query
+            inner_search_type (str): Search technique to use for expanded queries ("similarity" or "mmr")
+        """        # Setup QA chain with the specified k value and search type
         if not self.qa_chain or self._current_search_type != search_type:
             self.setup_qa_chain(k=k, search_type=search_type, is_chat=is_chat)
             self._current_search_type = search_type
-        
-        # Different chains expect different input keys and return different output keys
-        if not is_chat and search_type == "mmr":
-            # RetrievalQA chain expects "query" and returns "result"
-            response = self.qa_chain.invoke({"query": query})
-            answer = response["result"]
+
+        # Handle different search types and chain behaviors
+        if search_type == "multiple-query":
+            # Generate expanded queries
+            expanded_queries = self.expand_query(query, num_queries)
+            all_docs = []
+            seen_content = set()
+            
+            # Configure retriever based on chosen inner search type
+            if inner_search_type == "mmr":
+                base_retriever = self.vector_store.vector_store.as_retriever(
+                    search_type="mmr",
+                    search_kwargs={
+                        "k": max(2, k // (num_queries + 1)),  # Distribute k among all queries
+                        "fetch_k": k,  # Fetch more for MMR
+                        "lambda_mult": 0.5  # Balance relevance and diversity
+                    }
+                )
+            else:  # similarity search
+                base_retriever = self.vector_store.vector_store.as_retriever(
+                    search_type="similarity",
+                    search_kwargs={"k": max(2, k // (num_queries + 1))}  # Distribute k among all queries
+                )
+                console.print(f"\n[blue]Using {inner_search_type} search for expanded queries[/blue]")
+            
+            # Collect results from all queries using the chosen retriever
+            for expanded_q in expanded_queries:
+                # Create a temporary QA chain with the configured retriever
+                temp_chain = RetrievalQA.from_chain_type(
+                    llm=self.llm,
+                    chain_type="stuff",  # Use stuff chain for individual queries
+                    retriever=base_retriever,
+                    return_source_documents=True
+                )
+                
+                response = temp_chain.invoke({"query": expanded_q})
+                if 'source_documents' in response:
+                    # Deduplicate results
+                    for doc in response['source_documents']:
+                        if doc.page_content not in seen_content:
+                            all_docs.append(doc)
+                            seen_content.add(doc.page_content)
+            
+            # Use the original query for the final answer with all collected context
+            if all_docs:
+                # Create a final chain using refine for better integration of all results
+                final_chain = RetrievalQA.from_chain_type(
+                    llm=self.llm,
+                    chain_type="refine",  # Use refine to handle more context
+                    retriever=base_retriever,
+                    chain_type_kwargs={
+                        "question_prompt": self.get_prompt_templates()[0],
+                        "refine_prompt": self.get_prompt_templates()[1],
+                        "document_variable_name": "context"
+                    },
+                    return_source_documents=True
+                )
+                
+                response = final_chain.invoke({
+                    "query": query,
+                    "chat_history": [{"question": q} for q in expanded_queries[1:]]
+                })
+                answer = response["result"] if "result" in response else response["answer"]
+                response["source_documents"] = all_docs
+            else:                # Fallback to basic retrieval if no expanded results
+                response = self.qa_chain.invoke({"question": query})
+                answer = response["answer"]
+                
         else:
-            # ConversationalRetrievalChain expects "question" and returns "answer"
-            response = self.qa_chain.invoke({"question": query})
-            answer = response["answer"]
+            # For non-multiple-query searches
+            if not is_chat and search_type == "mmr":
+                # RetrievalQA chain expects "query" and returns "result"
+                response = self.qa_chain.invoke({"query": query})
+                answer = response["result"]
+            else:
+                # ConversationalRetrievalChain expects "question" and returns "answer"
+                response = self.qa_chain.invoke({"question": query})
+                answer = response["answer"]
             
         return answer, response["source_documents"]
 
@@ -199,12 +307,27 @@ def index(file_path):
 @cli.command()
 @click.argument('query')
 @click.option('--k', default=4, help='Number of document chunks to use for generating the answer')
-@click.option('--search-type', type=click.Choice(['similarity', 'mmr']), default='similarity',
-              help='Search technique to use. "similarity" for basic similarity search, "mmr" for MMR with contextual compression')
-def search(query, k, search_type):
+@click.option('--search-type', 
+              type=click.Choice(['similarity', 'mmr', 'multiple-query']), 
+              default='similarity',
+              help='Search technique to use. "similarity" for basic search, "mmr" for diversity, "multiple-query" for comprehensive results')
+@click.option('--num-queries', default=3, 
+              help='Number of additional queries to generate when using multiple-query search type')
+@click.option('--inner-search-type',
+              type=click.Choice(['similarity', 'mmr']),
+              default='similarity',
+              help='Search technique to use for expanded queries when using multiple-query search type')
+def search(query, k, search_type, num_queries, inner_search_type):
     """Search and answer questions using the indexed documents."""
     rag = RAGSystem()
-    answer, source_docs = rag.query_document(query, k=k, search_type=search_type, is_chat=False)
+    answer, source_docs = rag.query_document(
+        query, 
+        k=k, 
+        search_type=search_type, 
+        is_chat=False,
+        num_queries=num_queries,
+        inner_search_type=inner_search_type
+    )
     
     # Print the query
     console.print("\n" + "="*80)
@@ -237,9 +360,17 @@ def search(query, k, search_type):
 
 @cli.command()
 @click.option('--k', default=4, help='Number of document chunks to use for generating the answer')
-@click.option('--search-type', type=click.Choice(['similarity', 'mmr']), default='similarity',
-                help='Search technique to use. "similarity" for basic similarity search, "mmr" for MMR with contextual compression')
-def chat(k, search_type):
+@click.option('--search-type', 
+              type=click.Choice(['similarity', 'mmr', 'multiple-query']), 
+              default='similarity',
+              help='Search technique to use. "similarity" for basic search, "mmr" for diversity, "multiple-query" for comprehensive results')
+@click.option('--num-queries', default=3, 
+              help='Number of additional queries to generate when using multiple-query search type')
+@click.option('--inner-search-type',
+              type=click.Choice(['similarity', 'mmr']),
+              default='similarity',
+              help='Search technique to use for expanded queries when using multiple-query search type')
+def chat(k, search_type, num_queries, inner_search_type):
     """Start an interactive chat session with memory of conversation history."""
     rag = RAGSystem()
     console.print("\n[green]Starting chat session. Type 'exit' to end the conversation.[/green]")
@@ -255,7 +386,14 @@ def chat(k, search_type):
             console.print("\n[yellow]Ending chat session...[/yellow]")
             break
           # Get response
-        answer, source_docs = rag.query_document(query, k=k, search_type='similarity', is_chat=True)
+        answer, source_docs = rag.query_document(
+            query, 
+            k=k, 
+            search_type=search_type, 
+            is_chat=True,
+            num_queries=num_queries,
+            inner_search_type=inner_search_type
+        )
         
         # Print the answer
         answer_panel = Panel(
