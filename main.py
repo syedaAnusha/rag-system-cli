@@ -247,14 +247,8 @@ Return only the questions as a numbered list without any introduction or explana
                     from src.utils.visualization import plot_query_document_space
                     import numpy as np
                     from pathlib import Path
-                    
-                    # Sample corpus docs (max 100 for visualization)
-                    max_corpus_docs = 100
+                      # Get all document chunks from the vector store
                     corpus_docs = list(self.vector_store.vector_store.docstore._dict.values())
-                    if len(corpus_docs) > max_corpus_docs:
-                        import random
-                        random.seed(42)
-                        corpus_docs = random.sample(corpus_docs, max_corpus_docs)
                     
                     # Prepare texts for batch embedding
                     texts_to_embed = (

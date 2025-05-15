@@ -44,15 +44,14 @@ def plot_query_document_space(queries, query_embeddings, documents, doc_embeddin
     plt.figure(figsize=(12, 12), facecolor='white')
     
     # Set up the plot style
-    plt.gca().set_facecolor('white')
-      # Plot data points first without labels
+    plt.gca().set_facecolor('white')      # Plot data points first without labels
     # Corpus documents as background
     plt.scatter(corpus_points[:, 0], corpus_points[:, 1], 
                c='green', s=100, alpha=0.9)
     
     # Retrieved documents
     plt.scatter(doc_points[:, 0], doc_points[:, 1],
-               c='lightblue', s=100, alpha=0.6)
+               c='lightblue', s=100, alpha=0.6, zorder=2)
     
     # Add labels for retrieved documents
     for i, point in enumerate(doc_points):

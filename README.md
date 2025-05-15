@@ -15,10 +15,15 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
 - 🔍 Advanced Search & Retrieval
   - FAISS vector store for efficient similarity search
   - Google's Gemini model for embeddings
-  - Configurable context window (k parameter)  - Multiple retrieval techniques:
+  - Configurable context window (k parameter)
+  - Multiple retrieval techniques:
     - Similarity Search: Basic retrieval with stuff chain
     - MMR (Maximum Marginal Relevance): Diverse results with contextual compression
     - Multiple-Query: Comprehensive results by generating related questions
+  - 2D UMAP Visualization of semantic space:
+    - Shows entire document corpus
+    - Highlights retrieved documents (d1, d2, ...)
+    - Marks original query (Q) and expanded queries (q1, q2, ...)
 - 💡 Question Answering
   - Multiple chain types optimized for different scenarios:
     - ConversationalRetrievalChain with stuff chain for chat sessions
@@ -96,16 +101,35 @@ Options:
   ```
 
 - `--search-type`: Retrieval technique to use (default: similarity)
+
   - `similarity`: Basic similarity search with stuff chain
   - `mmr`: MMR with contextual compression for diverse results
-  - `multiple-query`: Comprehensive search using query expansion
-  ```powershell
+  - `multiple-query`: Comprehensive search using query expansion ```powershell
+
   # Using MMR with contextual compression
+
   python main.py search "what is useState hook?" --search-type mmr --k 5
 
-  # Using multiple-query expansion
+  # Using multiple-query expansion (generates UMAP visualization)
+
   python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
+
   ```
+
+  ```
+
+The multiple-query expansion mode generates a UMAP visualization that shows:
+
+- All document chunks in the corpus as blue dots
+- Retrieved relevant documents as larger light blue dots (labeled d1, d2, etc.)
+- Original query as a red star (labeled Q)
+- Expanded queries as orange stars (labeled q1, q2, etc.)
+
+This visualization helps in understanding:
+
+- How the retrieved documents relate to the queries in semantic space
+- The distribution of document chunks in the corpus
+- The relationship between original and expanded queries
 
 ### 3. Interactive Chat Mode
 
