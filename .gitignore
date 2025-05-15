@@ -136,3 +136,7 @@ temp/
 # User-specific files
 .DS_Store
 Thumbs.db
+
+# image files
+*.png
+*.jpg

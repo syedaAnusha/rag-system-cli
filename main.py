@@ -193,24 +193,14 @@ Return only the questions as a numbered list without any introduction or explana
         console.print()
         
         # Include original question
-        return [question] + expanded_questions    
+        return [question] + expanded_questions      
     def query_document(self, query: str, k: int = 4, search_type: str = "similarity", is_chat: bool = False,
                     num_queries: int = 3, inner_search_type: str = "similarity"):
-        """Query the document using QA chain for contextual answers.
-        
-        Args:
-            query (str): The question to ask
-            k (int): Number of documents to retrieve
-            search_type (str): Type of search to use. Either "similarity", "mmr", or "multiple-query"
-            is_chat (bool): Whether this is a chat session
-            num_queries (int): Number of additional queries to generate when using multiple-query
-            inner_search_type (str): Search technique to use for expanded queries ("similarity" or "mmr")
-        """        # Setup QA chain with the specified k value and search type
+        """Query the document using QA chain for contextual answers."""
         if not self.qa_chain or self._current_search_type != search_type:
             self.setup_qa_chain(k=k, search_type=search_type, is_chat=is_chat)
             self._current_search_type = search_type
 
-        # Handle different search types and chain behaviors
         if search_type == "multiple-query":
             # Generate expanded queries
             expanded_queries = self.expand_query(query, num_queries)
@@ -222,42 +212,89 @@ Return only the questions as a numbered list without any introduction or explana
                 base_retriever = self.vector_store.vector_store.as_retriever(
                     search_type="mmr",
                     search_kwargs={
-                        "k": max(2, k // (num_queries + 1)),  # Distribute k among all queries
-                        "fetch_k": k,  # Fetch more for MMR
-                        "lambda_mult": 0.5  # Balance relevance and diversity
+                        "k": max(2, k // (num_queries + 1)),
+                        "fetch_k": k,
+                        "lambda_mult": 0.5
                     }
                 )
             else:  # similarity search
                 base_retriever = self.vector_store.vector_store.as_retriever(
                     search_type="similarity",
-                    search_kwargs={"k": max(2, k // (num_queries + 1))}  # Distribute k among all queries
+                    search_kwargs={"k": max(2, k // (num_queries + 1))}
                 )
-                console.print(f"\n[blue]Using {inner_search_type} search for expanded queries[/blue]")
             
-            # Collect results from all queries using the chosen retriever
+            # Use single chain for all queries
+            temp_chain = RetrievalQA.from_chain_type(
+                llm=self.llm,
+                chain_type="stuff",
+                retriever=base_retriever,
+                return_source_documents=True
+            )
+            
+            # Process each query
+            console.print(f"\n[blue]Running {inner_search_type} search for queries...[/blue]")
             for expanded_q in expanded_queries:
-                # Create a temporary QA chain with the configured retriever
-                temp_chain = RetrievalQA.from_chain_type(
-                    llm=self.llm,
-                    chain_type="stuff",  # Use stuff chain for individual queries
-                    retriever=base_retriever,
-                    return_source_documents=True
-                )
-                
                 response = temp_chain.invoke({"query": expanded_q})
                 if 'source_documents' in response:
-                    # Deduplicate results
                     for doc in response['source_documents']:
                         if doc.page_content not in seen_content:
                             all_docs.append(doc)
                             seen_content.add(doc.page_content)
             
-            # Use the original query for the final answer with all collected context
+            # Generate visualization if we have results
             if all_docs:
-                # Create a final chain using refine for better integration of all results
+                try:
+                    from src.utils.visualization import plot_query_document_space
+                    import numpy as np
+                    from pathlib import Path
+                    
+                    # Sample corpus docs (max 100 for visualization)
+                    max_corpus_docs = 100
+                    corpus_docs = list(self.vector_store.vector_store.docstore._dict.values())
+                    if len(corpus_docs) > max_corpus_docs:
+                        import random
+                        random.seed(42)
+                        corpus_docs = random.sample(corpus_docs, max_corpus_docs)
+                    
+                    # Prepare texts for batch embedding
+                    texts_to_embed = (
+                        expanded_queries +  # Queries first
+                        [doc.page_content for doc in all_docs] +  # Then retrieved docs
+                        [doc.page_content for doc in corpus_docs]  # Then corpus
+                    )
+                    
+                    # Batch embed all texts
+                    console.print("[blue]Computing embeddings for visualization...[/blue]")
+                    all_embeddings = self.vector_store.embeddings.embed_documents(texts_to_embed)
+                    
+                    # Split embeddings into groups
+                    n_queries = len(expanded_queries)
+                    n_docs = len(all_docs)
+                    query_embeddings = np.array(all_embeddings[:n_queries])
+                    doc_embeddings = np.array(all_embeddings[n_queries:n_queries + n_docs])
+                    corpus_embeddings = np.array(all_embeddings[n_queries + n_docs:])
+                    
+                    # Create visualizations directory
+                    plots_dir = Path("data/visualizations")
+                    plots_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Generate and save the plot
+                    plot_query_document_space(
+                        queries=expanded_queries,
+                        query_embeddings=query_embeddings,
+                        documents=all_docs,
+                        doc_embeddings=doc_embeddings,
+                        corpus_docs=corpus_docs,
+                        corpus_embeddings=corpus_embeddings,
+                        output_dir=plots_dir
+                    )
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Could not generate visualization: {str(e)}[/yellow]")
+            
+                # Create final chain for comprehensive answer
                 final_chain = RetrievalQA.from_chain_type(
                     llm=self.llm,
-                    chain_type="refine",  # Use refine to handle more context
+                    chain_type="refine",
                     retriever=base_retriever,
                     chain_type_kwargs={
                         "question_prompt": self.get_prompt_templates()[0],
@@ -267,24 +304,23 @@ Return only the questions as a numbered list without any introduction or explana
                     return_source_documents=True
                 )
                 
+                # Generate final response
                 response = final_chain.invoke({
                     "query": query,
                     "chat_history": [{"question": q} for q in expanded_queries[1:]]
                 })
                 answer = response["result"] if "result" in response else response["answer"]
                 response["source_documents"] = all_docs
-            else:                # Fallback to basic retrieval if no expanded results
+            else:
+                # Fallback to basic retrieval if no expanded results
                 response = self.qa_chain.invoke({"question": query})
                 answer = response["answer"]
-                
         else:
             # For non-multiple-query searches
             if not is_chat and search_type == "mmr":
-                # RetrievalQA chain expects "query" and returns "result"
                 response = self.qa_chain.invoke({"query": query})
                 answer = response["result"]
             else:
-                # ConversationalRetrievalChain expects "question" and returns "answer"
                 response = self.qa_chain.invoke({"question": query})
                 answer = response["answer"]
             

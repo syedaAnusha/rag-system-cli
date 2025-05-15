@@ -6,6 +6,7 @@ python-dotenv
 assemblyai
 google-generativeai
 pypdf2
+umap-learn
 python-docx
 sentence-transformers
 yt-dlp
@@ -18,3 +19,7 @@ langchain_huggingface
 pypdf
 click
 rich
+matplotlib 
+networkx 
+scikit-learn 
+numpy
