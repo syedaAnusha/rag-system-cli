@@ -9,6 +9,8 @@ pypdf2
 umap-learn
 python-docx
 sentence-transformers
+transformers
+torch
 yt-dlp
 langchain
 langchain-community

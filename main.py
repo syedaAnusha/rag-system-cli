@@ -3,6 +3,7 @@ from pathlib import Path
 from src.document_processing.processor import DocumentProcessor
 from src.core.vectorstore import VectorStore
 from src.core.llm import init_llm
+from src.core.reranking import CrossEncoderReranker
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
@@ -22,6 +23,7 @@ class RAGSystem:
         self.llm = init_llm()
         self.qa_chain = None
         self._current_search_type = None
+        self.reranker = CrossEncoderReranker()
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True,
@@ -233,6 +235,10 @@ Return only the questions as a numbered list without any introduction or explana
             
             # Process each query
             console.print(f"\n[blue]Running {inner_search_type} search for queries...[/blue]")
+            all_docs = []
+            seen_content = set()
+            
+            # First pass: collect documents from each expanded query
             for expanded_q in expanded_queries:
                 response = temp_chain.invoke({"query": expanded_q})
                 if 'source_documents' in response:
@@ -241,13 +247,23 @@ Return only the questions as a numbered list without any introduction or explana
                             all_docs.append(doc)
                             seen_content.add(doc.page_content)
             
+            # Apply cross-encoder reranking
+            console.print("[blue]Reranking documents with cross-encoder...[/blue]")
+            reranked_docs = self.reranker.rerank_documents(
+                query=query,  # Use original query for final ranking
+                documents=all_docs,
+                top_k=k  # Only keep top k documents after reranking
+            )
+            
+            # Update all_docs with reranked documents
+            all_docs = [doc for doc, _ in reranked_docs]  # Discard scores after reranking
+            
             # Generate visualization if we have results
             if all_docs:
                 try:
                     from src.utils.visualization import plot_query_document_space
                     import numpy as np
-                    from pathlib import Path
-                      # Get all document chunks from the vector store
+                    from pathlib import Path                    # Get all document chunks from the vector store
                     corpus_docs = list(self.vector_store.vector_store.docstore._dict.values())
                     
                     # Prepare texts for batch embedding
@@ -346,7 +362,7 @@ def index(file_path):
 @click.option('--inner-search-type',
               type=click.Choice(['similarity', 'mmr']),
               default='similarity',
-              help='Search technique to use for expanded queries when using multiple-query search type')
+              help='Search technique to use for expanded queries when using multiple-query search type. In multiple-query mode, results are always reranked using cross-encoder.')
 def search(query, k, search_type, num_queries, inner_search_type):
     """Search and answer questions using the indexed documents."""
     rag = RAGSystem()

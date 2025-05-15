@@ -19,7 +19,10 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
   - Multiple retrieval techniques:
     - Similarity Search: Basic retrieval with stuff chain
     - MMR (Maximum Marginal Relevance): Diverse results with contextual compression
-    - Multiple-Query: Comprehensive results by generating related questions
+    - Multiple-Query: Comprehensive results with query expansion and cross-encoder reranking
+  - Advanced reranking:
+    - Cross-encoder document reranking using ms-marco-MiniLM for optimized relevance
+    - Automatic document ordering based on cross-encoder relevance scores
   - 2D UMAP Visualization of semantic space:
     - Shows entire document corpus
     - Highlights retrieved documents (d1, d2, ...)
@@ -113,6 +116,20 @@ Options:
   # Using multiple-query expansion (generates UMAP visualization)
 
   python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
+
+  # Using multiple-query expansion with cross-encoder reranking
+
+  python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
+
+  # The multiple-query mode now includes:
+
+  # 1. Query expansion using LLM
+
+  # 2. Document retrieval for each expanded query
+
+  # 3. Cross-encoder reranking for optimal document relevance
+
+  # 4. UMAP visualization showing semantic space
 
   ```
 
