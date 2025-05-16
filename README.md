@@ -22,7 +22,7 @@ This CLI system implements a RAG pipeline that enhances Large Language Model (LL
     - Multiple-Query: Comprehensive results with query expansion and cross-encoder reranking
   - Advanced reranking:
     - Cross-encoder document reranking using ms-marco-MiniLM for optimized relevance
-    - Automatic document ordering based on cross-encoder relevance scores  - 2D UMAP Visualization of semantic space:
+    - Automatic document ordering based on cross-encoder relevance scores - 2D UMAP Visualization of semantic space:
     - Shows document corpus as background
     - Displays reranked documents with distance scores and color gradient
     - Shows original query (Q) with connecting lines to retrieved documents
@@ -109,31 +109,27 @@ Options:
   - `mmr`: MMR with contextual compression for diverse results
   - `multiple-query`: Comprehensive search using query expansion ```powershell
 
-  # Using MMR with contextual compression
+  ## Using MMR with contextual compression
 
   python main.py search "what is useState hook?" --search-type mmr --k 5
 
-  # Using multiple-query expansion (generates UMAP visualization)
+  ## Using multiple-query expansion (generates UMAP visualization)
 
   python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
 
-  # Using multiple-query expansion with cross-encoder reranking
+  ## Using multiple-query expansion with cross-encoder reranking
 
   python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
 
-  # The multiple-query mode now includes:
+  ## The multiple-query mode now includes:
 
-  # 1. Query expansion using LLM
+  1. Query expansion using LLM
 
-  # 2. Document retrieval for each expanded query
+  2. Document retrieval for each expanded query
 
-  # 3. Cross-encoder reranking for optimal document relevance
+  3. Cross-encoder reranking for optimal document relevance
 
-  # 4. UMAP visualization showing semantic space
-
-  ```
-
-  ```
+  4. UMAP visualization showing semantic space
 
 The multiple-query expansion mode generates a UMAP visualization that shows:
 
