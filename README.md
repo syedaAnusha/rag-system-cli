@@ -109,19 +109,19 @@ Options:
   - `mmr`: MMR with contextual compression for diverse results
   - `multiple-query`: Comprehensive search using query expansion ```powershell
 
-  ## Using MMR with contextual compression
+  ### Using MMR with contextual compression
 
   python main.py search "what is useState hook?" --search-type mmr --k 5
 
-  ## Using multiple-query expansion (generates UMAP visualization)
+  ### Using multiple-query expansion (generates UMAP visualization)
 
   python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
 
-  ## Using multiple-query expansion with cross-encoder reranking
+  ### Using multiple-query expansion with cross-encoder reranking
 
   python main.py search "what is useState hook?" --search-type multiple-query --k 6 --num-queries 3
 
-  ## The multiple-query mode now includes:
+  ### The multiple-query mode now includes:
 
   1. Query expansion using LLM
 
